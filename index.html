@@ -290,218 +290,175 @@
     </footer>
 
     <script>
-        // ==========================================
-        // 1. BACKEND API INTEGRATION
-        // ==========================================
-        const API_URL = "https://phishsentinel-api.onrender.com/api/scan?url="; 
+    // ==========================================
+    // 1. BACKEND API INTEGRATION (FIXED)
+    // ==========================================
+    const API_URL = "https://phishsentinel-api.onrender.com/api/scan?url="; 
 
-        async function startAnalysis() {
-            const rawUrl = document.getElementById('urlInput').value.trim();
-            if(!rawUrl) return;
+    async function startAnalysis() {
+        const rawUrl = document.getElementById('urlInput').value.trim();
+        if(!rawUrl) return;
 
-            document.getElementById('idleState').classList.add('hidden');
-            document.getElementById('scanner').classList.remove('hidden');
-            document.getElementById('analysisResult').classList.add('hidden');
+        // Reset UI to Scanning State
+        document.getElementById('idleState').classList.add('hidden');
+        document.getElementById('scanner').classList.remove('hidden');
+        document.getElementById('analysisResult').classList.add('hidden');
 
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: rawUrl })
-                });
+        try {
+            // Updated to GET to match your FastAPI backend
+            const response = await fetch(API_URL + encodeURIComponent(rawUrl));
 
-                if (!response.ok) throw new Error("API Request Failed");
-                const data = await response.json();
-                updateUIWithResults(data);
+            if (!response.ok) throw new Error("API Request Failed");
+            const data = await response.json();
+            
+            // Pass the data to the UI updater
+            updateUIWithResults(data);
 
-            } catch (error) {
-                console.error("Scanning Error:", error);
-                alert("Failed to connect to the PhishSentinel backend. Make sure your local FastAPI server is running.");
-                document.getElementById('scanner').classList.add('hidden');
-                document.getElementById('idleState').classList.remove('hidden');
-            }
-        }
-
-        function updateUIWithResults(data) {
+        } catch (error) {
+            console.error("Scanning Error:", error);
+            alert("Connection Error. Please wait 60 seconds for the free Render server to 'wake up' and try again.");
             document.getElementById('scanner').classList.add('hidden');
-            const result = document.getElementById('analysisResult');
-            result.classList.remove('hidden');
-            setTimeout(() => result.classList.replace('opacity-0', 'opacity-100'), 50);
+            document.getElementById('idleState').classList.remove('hidden');
+        }
+    }
 
-            const title = document.getElementById('resultTitle');
-            const bar = document.getElementById('scoreBar');
-            const status = document.getElementById('visualStatus');
-            const detailsContainer = document.getElementById('analysisDetails');
+    function updateUIWithResults(data) {
+        document.getElementById('scanner').classList.add('hidden');
+        const result = document.getElementById('analysisResult');
+        result.classList.remove('hidden');
+        setTimeout(() => result.classList.replace('opacity-0', 'opacity-100'), 50);
 
-            let riskScore = 0;
-            
-            if (data.final_status === "Phishing") {
-                riskScore = data.confidence_score;
-                title.innerText = "THREAT DETECTED";
-                title.className = "text-4xl font-black mb-4 text-red-500";
-                bar.className = "h-full bg-red-500";
-                status.innerText = riskScore + "% CRITICAL";
-                status.className = "text-red-500 font-black";
-            } else if (data.final_status === "Suspicious") {
-                riskScore = data.confidence_score;
-                title.innerText = "SUSPICIOUS";
-                title.className = "text-4xl font-black mb-4 text-yellow-400";
-                bar.className = "h-full bg-yellow-400";
-                status.innerText = riskScore + "% ELEVATED";
-                status.className = "text-yellow-400 font-black";
-            } else {
-                riskScore = 100 - data.confidence_score; 
-                title.innerText = "VERIFIED SAFE";
-                title.className = "text-4xl font-black mb-4 text-cyan-400";
-                bar.className = "h-full bg-cyan-400";
-                status.innerText = riskScore + "% LOW";
-                status.className = "text-cyan-400 font-black";
-            }
+        const title = document.getElementById('resultTitle');
+        const bar = document.getElementById('scoreBar');
+        const status = document.getElementById('visualStatus');
+        const detailsContainer = document.getElementById('analysisDetails');
 
-            setTimeout(() => { bar.style.width = riskScore + "%"; }, 100);
+        // Match your FastAPI keys: 'status' and 'confidence'
+        const currentStatus = data.status; 
+        const riskScore = data.confidence;
 
-            const reasons = [
-                { label: "ML Confidence", text: `${data.confidence_score}%`, color: "text-white" },
-                { label: "Subdomains", text: data.features_extracted.subdomain_count, color: data.features_extracted.subdomain_count > 2 ? "text-yellow-400" : "text-green-400" },
-                { label: "External DB Check", text: data.api_intelligence.status.toUpperCase(), color: data.api_intelligence.status === "safe" ? "text-green-400" : "text-slate-500" }
-            ];
-
-            detailsContainer.innerHTML = reasons.map(r => `
-                <div class="p-4 rounded-xl bg-white/5 border border-white/5 text-xs flex justify-between font-bold">
-                    <span class="text-slate-500 uppercase tracking-widest">${r.label}</span>
-                    <span class="${r.color}">${r.text}</span>
-                </div>
-            `).join('');
-            
-            triggerMapAttack(data.final_status);
+        if (currentStatus === "Phishing") {
+            title.innerText = "THREAT DETECTED";
+            title.className = "text-4xl font-black mb-4 text-red-500";
+            bar.className = "h-full bg-red-500";
+            status.innerText = riskScore + "% CRITICAL";
+            status.className = "text-red-500 font-black";
+        } else if (currentStatus === "Suspicious") {
+            title.innerText = "SUSPICIOUS";
+            title.className = "text-4xl font-black mb-4 text-yellow-400";
+            bar.className = "h-full bg-yellow-400";
+            status.innerText = riskScore + "% ELEVATED";
+            status.className = "text-yellow-400 font-black";
+        } else {
+            title.innerText = "VERIFIED SAFE";
+            title.className = "text-4xl font-black mb-4 text-cyan-400";
+            bar.className = "h-full bg-cyan-400";
+            status.innerText = riskScore + "% LOW";
+            status.className = "text-cyan-400 font-black";
         }
 
-        // ==========================================
-        // 2. FIXED WORLD THREAT MAP VISUALS
-        // ==========================================
-        const canvas = document.getElementById('threatCanvas');
-        const ctx = canvas.getContext('2d');
-        let w, h;
+        setTimeout(() => { bar.style.width = riskScore + "%"; }, 100);
 
-        function setSize() {
-            const rect = canvas.parentElement.getBoundingClientRect();
-            w = canvas.width = rect.width;
-            h = canvas.height = rect.height;
-        }
-        window.addEventListener('resize', setSize);
-        setTimeout(setSize, 100); 
-
-        // Tightly aligned coordinates based on the new HUD map image
-        const regions = [
-            { name: "NA", x: [0.20, 0.30], y: [0.30, 0.45] },
-            { name: "SA", x: [0.30, 0.35], y: [0.60, 0.75] },
-            { name: "EU", x: [0.48, 0.55], y: [0.30, 0.40] },
-            { name: "AF", x: [0.48, 0.55], y: [0.45, 0.60] },
-            { name: "AS", x: [0.60, 0.80], y: [0.30, 0.50] },
-            { name: "OC", x: [0.75, 0.85], y: [0.65, 0.75] }
-        ];
-
-        const nodes = [];
-        // Reduced node count for a cleaner look
-        for(let i=0; i<30; i++) {
-            const region = regions[Math.floor(Math.random() * regions.length)];
-            nodes.push({
-                x: (Math.random() * (region.x[1] - region.x[0]) + region.x[0]), 
-                y: (Math.random() * (region.y[1] - region.y[0]) + region.y[0])  
-            });
-        }
+        // Analysis Reason display
+        detailsContainer.innerHTML = `
+            <div class="p-4 rounded-xl bg-white/5 border border-white/5 text-xs flex flex-col gap-2 font-bold text-left">
+                <span class="text-slate-500 uppercase tracking-widest">DETECTION LOG:</span>
+                <span class="text-white font-mono">${data.reason}</span>
+            </div>
+        `;
         
-        const attacks = [];
+        triggerMapAttack(currentStatus);
+    }
 
-        function drawMap() {
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; // Slower fade out for smoother tails
-            ctx.fillRect(0, 0, w, h);
-            
-            ctx.globalCompositeOperation = 'source-over';
+    // ==========================================
+    // 2. WORLD THREAT MAP VISUALS (ANIMATION)
+    // ==========================================
+    const canvas = document.getElementById('threatCanvas');
+    const ctx = canvas.getContext('2d');
+    let w, h;
 
-            // Draw Server Nodes (Much smaller, more subtle)
-            nodes.forEach(n => {
-                ctx.fillStyle = 'rgba(0, 242, 255, 0.3)';
-                ctx.beginPath(); 
-                ctx.arc(n.x * w, n.y * h, 1, 0, Math.PI * 2); 
-                ctx.fill();
-            });
+    function setSize() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        w = canvas.width = rect.width;
+        h = canvas.height = rect.height;
+    }
+    window.addEventListener('resize', setSize);
+    setTimeout(setSize, 100); 
 
-            // Drastically reduced background attacks (calmer UI)
-            if(Math.random() > 0.992) {
-                createRandomAttack();
-            }
+    const regions = [
+        { name: "NA", x: [0.20, 0.30], y: [0.30, 0.45] },
+        { name: "SA", x: [0.30, 0.35], y: [0.60, 0.75] },
+        { name: "EU", x: [0.48, 0.55], y: [0.30, 0.40] },
+        { name: "AS", x: [0.60, 0.80], y: [0.30, 0.50] }
+    ];
 
-            for (let i = attacks.length - 1; i >= 0; i--) {
-                let a = attacks[i];
-                a.p += 0.008; // Slower, elegant laser speed
-                
-                const sx = a.s.x * w, sy = a.s.y * h;
-                const ex = a.e.x * w, ey = a.e.y * h;
-                
-                const cx = sx + (ex - sx) * a.p;
-                const cy = sy + (ey - sy) * a.p - Math.sin(a.p * Math.PI) * 50; // Flatter, realistic trajectory
-                
-                const opacity = Math.max(0, 1 - a.p); // Fade out naturally at the end
-                
-                ctx.strokeStyle = a.color.replace(')', `, ${opacity})`).replace('rgb', 'rgba');
-                ctx.lineWidth = 1.2; // Thinner, sharper lines
-                ctx.beginPath(); 
-                ctx.moveTo(sx, sy);
-                ctx.quadraticCurveTo((sx+ex)/2, Math.min(sy, ey) - 50, cx, cy);
-                ctx.stroke();
+    const nodes = [];
+    for(let i=0; i<30; i++) {
+        const region = regions[Math.floor(Math.random() * regions.length)];
+        nodes.push({
+            x: (Math.random() * (region.x[1] - region.x[0]) + region.x[0]), 
+            y: (Math.random() * (region.y[1] - region.y[0]) + region.y[0])  
+        });
+    }
+    
+    const attacks = [];
 
-                // Leading pinpoint (smaller dot)
-                ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                ctx.beginPath();
-                ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
-                ctx.fill();
+    function drawMap() {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; 
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'source-over';
 
-                if(a.p >= 1) {
-                    attacks.splice(i, 1);
-                    if(a.isUserScan) pushLog(a.status);
-                }
-            }
-            requestAnimationFrame(drawMap);
-        }
-        
-        setTimeout(drawMap, 200);
+        nodes.forEach(n => {
+            ctx.fillStyle = 'rgba(0, 242, 255, 0.3)';
+            ctx.beginPath(); 
+            ctx.arc(n.x * w, n.y * h, 1, 0, Math.PI * 2); 
+            ctx.fill();
+        });
 
-        function createRandomAttack() {
-            const start = nodes[Math.floor(Math.random()*nodes.length)];
-            const end = nodes[Math.floor(Math.random()*nodes.length)];
-            if (start !== end) attacks.push({ s: start, e: end, p: 0, color: 'rgb(0, 242, 255)', isUserScan: false });
-        }
-
-        function triggerMapAttack(status) {
-            const start = nodes[Math.floor(Math.random()*nodes.length)];
-            const end = nodes[Math.floor(Math.random()*nodes.length)];
-            let color = 'rgb(0, 242, 255)'; // Safe
-            if(status === 'Phishing') color = 'rgb(239, 68, 68)'; // Red
-            if(status === 'Suspicious') color = 'rgb(250, 204, 21)'; // Yellow
-
-            attacks.push({ s: start, e: end, p: 0, color: color, isUserScan: true, status: status });
-        }
-
-        function pushLog(status = 'Phishing') {
-            const log = document.getElementById('logStream');
-            const el = document.createElement('div');
-            const color = status === 'Phishing' ? 'text-red-500 animate-pulse' : (status === 'Suspicious' ? 'text-yellow-400' : 'text-cyan-400');
-            el.className = `flex justify-between items-center ${color}`;
-            
-            const threatId = Math.random().toString(16).slice(2,8).toUpperCase();
-            const action = status === 'Safe' ? 'CLEARED' : 'BLOCKED';
-            el.innerHTML = `<span>[${action}] ${threatId}</span><span>Node_${Math.floor(Math.random()*99)}</span>`;
-            
-            log.prepend(el);
-            if(log.children.length > 8) log.lastElementChild.remove();
-            
-            if (status !== 'Safe') {
-                const count = document.getElementById('counter');
-                count.innerText = (parseInt(count.innerText.replace(/,/g,'')) + 1).toLocaleString();
+        for (let i = attacks.length - 1; i >= 0; i--) {
+            let a = attacks[i];
+            a.p += 0.008; 
+            const sx = a.s.x * w, sy = a.s.y * h;
+            const ex = a.e.x * w, ey = a.e.y * h;
+            const cx = sx + (ex - sx) * a.p;
+            const cy = sy + (ey - sy) * a.p - Math.sin(a.p * Math.PI) * 50; 
+            const opacity = Math.max(0, 1 - a.p); 
+            ctx.strokeStyle = a.color.replace(')', `, ${opacity})`).replace('rgb', 'rgba');
+            ctx.lineWidth = 1.2; 
+            ctx.beginPath(); 
+            ctx.moveTo(sx, sy);
+            ctx.quadraticCurveTo((sx+ex)/2, Math.min(sy, ey) - 50, cx, cy);
+            ctx.stroke();
+            if(a.p >= 1) {
+                attacks.splice(i, 1);
+                if(a.isUserScan) pushLog(a.status);
             }
         }
-    </script>
+        requestAnimationFrame(drawMap);
+    }
+    
+    setTimeout(drawMap, 200);
+
+    function triggerMapAttack(status) {
+        const start = nodes[Math.floor(Math.random()*nodes.length)];
+        const end = nodes[Math.floor(Math.random()*nodes.length)];
+        let color = 'rgb(0, 242, 255)'; 
+        if(status === 'Phishing') color = 'rgb(239, 68, 68)';
+        if(status === 'Suspicious') color = 'rgb(250, 204, 21)';
+        attacks.push({ s: start, e: end, p: 0, color: color, isUserScan: true, status: status });
+    }
+
+    function pushLog(status = 'Phishing') {
+        const log = document.getElementById('logStream');
+        const el = document.createElement('div');
+        const color = status === 'Phishing' ? 'text-red-500' : (status === 'Suspicious' ? 'text-yellow-400' : 'text-cyan-400');
+        el.className = `flex justify-between items-center ${color}`;
+        const threatId = Math.random().toString(16).slice(2,8).toUpperCase();
+        el.innerHTML = `<span>[${status.toUpperCase()}] ${threatId}</span><span>Node_${Math.floor(Math.random()*99)}</span>`;
+        log.prepend(el);
+        if(log.children.length > 8) log.lastElementChild.remove();
+    }
+</script>
 </body>
 </html>
